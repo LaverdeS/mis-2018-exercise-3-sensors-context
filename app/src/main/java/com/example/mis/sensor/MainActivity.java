@@ -4,6 +4,8 @@ import android.os.AsyncTask;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
+
 import com.example.mis.sensor.FFT;
 
 import java.util.Random;
@@ -23,6 +25,9 @@ public class MainActivity extends AppCompatActivity {
         rndAccExamplevalues = new double[64];
         randomFill(rndAccExamplevalues);
         new FFTAsynctask(64).execute(rndAccExamplevalues);
+    }
+
+    public void music(View view) {
     }
 
 
