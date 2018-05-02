@@ -1,5 +1,10 @@
 package com.example.mis.sensor;
 
+import android.content.Context;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.os.AsyncTask;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -15,22 +20,39 @@ public class MainActivity extends AppCompatActivity {
     //example variables
     private double[] rndAccExamplevalues;
     private double[] freqCounts;
+    private SensorManager mSensormanager;
+    private Sensor accelerometer;
+    private int sampleRate1=200000;
+    private int sampleRate2=8;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        //setContentView(R.layout.activity_main);
 
         //initiate and fill example array with random values
         rndAccExamplevalues = new double[64];
         randomFill(rndAccExamplevalues);
         new FFTAsynctask(64).execute(rndAccExamplevalues);
+
+        mSensormanager=(SensorManager)getSystemService(Context.SENSOR_SERVICE);
+        accelerometer=mSensormanager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        //mSensormanager.registerListener(this,accelerometer,sampleRate1);
+
     }
 
-    public void music(View view) {
+    public class Graphs extends AppCompatActivity implements SensorEventListener {
+
+        @Override
+        public void onSensorChanged(SensorEvent event) {
+
+        }
+
+        @Override
+        public void onAccuracyChanged(Sensor sensor, int accuracy) {
+
+        }
     }
-
-
     /**
      * Implements the fft functionality as an async task
      * FFT(int n): constructor with fft length
