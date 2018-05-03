@@ -6,6 +6,20 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
+    <TextView
+        android:id="@+id/textView1"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentStart="true"
+        android:layout_centerVertical="false"
+        android:layout_marginLeft="16dp"
+        android:layout_marginRight="0dp"
+        android:layout_marginVertical="8dp"
+        android:text="Sample Rate"
+        android:textSize="14sp"
+        app:layout_constraintEnd_toStartOf="@id/seekBar1"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
     <TextView
         android:id="@+id/textView2"
@@ -13,25 +27,14 @@
         android:layout_height="wrap_content"
         android:layout_alignParentStart="true"
         android:layout_centerVertical="false"
-        android:layout_margin="8dp"
+        android:layout_marginLeft="16dp"
+        android:layout_marginRight="0dp"
+        android:layout_marginVertical="8dp"
         android:text="Window Size"
         android:textSize="14sp"
-        app:layout_constraintBottom_toTopOf="@+id/graph1"
+        app:layout_constraintBottom_toTopOf="@+id/graph2"
         app:layout_constraintLeft_toLeftOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/graph2" />
-
-    <TextView
-        android:id="@+id/textView1"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignParentStart="true"
-        android:layout_centerVertical="false"
-        android:layout_margin="8dp"
-        android:text="Sample Rate"
-        android:textSize="14sp"
-        app:layout_constraintEnd_toStartOf="@id/seekBar1"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toBottomOf="@+id/graph1" />
 
     <SeekBar
         android:id="@+id/seekBar1"
@@ -39,32 +42,8 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_alignParentEnd="false"
-        android:layout_margin="8dp"
-        android:max="10"
-        android:padding="0dp"
-        android:paddingBottom="0dp"
-        android:paddingEnd="0dp"
-        android:paddingLeft="0dp"
-        android:paddingRight="0dp"
-        android:paddingStart="0dp"
-        android:paddingTop="0dp"
-        android:progress="5"
-        android:thumb="@android:drawable/ic_notification_overlay"
-        app:layout_constraintBottom_toTopOf="@id/graph2"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toEndOf="@id/textView1"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintWidth_percent="70" />
-
-    <SeekBar
-        android:id="@+id/seekBar2"
-        style="@style/Widget.AppCompat.SeekBar.Discrete"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_alignParentEnd="false"
-        android:layout_centerVertical="false"
-        android:layout_margin="8dp"
-        android:clickable="false"
+        android:layout_marginVertical="8dp"
+        android:layout_marginHorizontal="16dp"
         android:max="10"
         android:padding="0dp"
         android:paddingBottom="0dp"
@@ -77,17 +56,43 @@
         android:thumb="@android:drawable/ic_notification_overlay"
         app:layout_constraintBottom_toTopOf="@id/graph1"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@id/textView1"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintWidth_percent="70" />
+
+    <SeekBar
+        android:id="@+id/seekBar2"
+        style="@style/Widget.AppCompat.SeekBar.Discrete"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_alignParentEnd="false"
+        android:layout_centerVertical="false"
+        android:layout_marginVertical="8dp"
+        android:layout_marginHorizontal="16dp"
+        android:clickable="false"
+        android:max="10"
+        android:paddingBottom="0dp"
+        android:paddingEnd="0dp"
+        android:paddingLeft="8dp"
+        android:paddingRight="8dp"
+        android:paddingStart="0dp"
+        android:paddingTop="0dp"
+        android:progress="5"
+        android:thumb="@android:drawable/ic_notification_overlay"
+        app:layout_constraintBottom_toTopOf="@id/graph2"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@id/textView2"
-        app:layout_constraintTop_toBottomOf="@id/graph2"
+        app:layout_constraintTop_toBottomOf="@id/graph1"
         app:layout_constraintWidth_percent="100" />
 
     <com.jjoe64.graphview.GraphView
-        android:id="@+id/graph2"
+        android:id="@+id/graph1"
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:layout_alignParentBottom="false"
         android:layout_alignParentStart="false"
-        android:layout_margin="8dp"
+        android:layout_marginVertical="8dp"
+        android:layout_marginHorizontal="16dp"
         android:padding="0dp"
         app:layout_constraintBottom_toTopOf="@id/seekBar2"
         app:layout_constraintHeight_max="300dp"
@@ -99,11 +104,12 @@
         app:layout_constraintWidth_percent="90" />
 
     <com.jjoe64.graphview.GraphView
-        android:id="@+id/graph1"
+        android:id="@+id/graph2"
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:layout_alignParentTop="true"
-        android:layout_margin="8dp"
+        android:layout_marginVertical="8dp"
+        android:layout_marginHorizontal="16dp"
         android:padding="0dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"

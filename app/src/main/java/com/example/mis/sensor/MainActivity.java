@@ -1,6 +1,7 @@
 package com.example.mis.sensor;
 
 import android.content.Context;
+import android.graphics.Color;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -10,18 +11,30 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.widget.SeekBar;
+import android.widget.Toast;
 
 import com.example.mis.sensor.FFT;
+import com.jjoe64.graphview.GraphView;
+import com.jjoe64.graphview.LegendRenderer;
+import com.jjoe64.graphview.series.DataPoint;
+import com.jjoe64.graphview.series.LineGraphSeries;
 
 import java.util.Random;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements SensorEventListener {
 
     //example variables
     private double[] rndAccExamplevalues;
     private double[] freqCounts;
-    private SensorManager mSensormanager;
+    private SensorManager mSensorManager;
     private Sensor accelerometer;
+    private SeekBar mSeekBar1;
+    private GraphView graph1;
+    private LineGraphSeries<DataPoint> accelXSeries = new LineGraphSeries<>();
+    private LineGraphSeries<DataPoint> accelYSeries = new LineGraphSeries<>();
+    private LineGraphSeries<DataPoint> accelZSeries = new LineGraphSeries<>();
+    private LineGraphSeries<DataPoint> accelMagSeries = new LineGraphSeries<>();
     private int sampleRate1=200000;
     private int sampleRate2=8;
 
@@ -30,34 +43,93 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        mSeekBar1 = findViewById(R.id.seekBar1);
+        mSeekBar1.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            private int tempProgress;
+
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                tempProgress = progress;
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {}
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                sampleRate1 = (tempProgress * 20000) + 10000;
+                mSensorManager.unregisterListener(MainActivity.this);
+                mSensorManager.registerListener(MainActivity.this, accelerometer, sampleRate1);            }
+        });
+
+        graph1 = (GraphView) findViewById(R.id.graph1);
+        graph1.getViewport().setScrollableY(false);
+        graph1.getViewport().setScrollable(true);
+        graph1.getViewport().setBackgroundColor(Color.DKGRAY);
+        graph1.getViewport().setBorderColor(Color.LTGRAY);
+        graph1.getGridLabelRenderer().setHorizontalLabelsVisible(false);
+
+        graph1.addSeries(accelXSeries);
+        accelXSeries.setColor(Color.RED);
+        graph1.addSeries(accelYSeries);
+        accelYSeries.setColor(Color.GREEN);
+        graph1.addSeries(accelZSeries);
+        accelZSeries.setColor(Color.BLUE);
+        graph1.addSeries(accelMagSeries);
+        accelMagSeries.setColor(Color.WHITE);
+
         //initiate and fill example array with random values
-        //rndAccExamplevalues = new double[64];
-        //randomFill(rndAccExamplevalues);
-        //new FFTAsynctask(64).execute(rndAccExamplevalues);
+        rndAccExamplevalues = new double[64];
+        randomFill(rndAccExamplevalues);
+        new FFTAsynctask(64).execute(rndAccExamplevalues);
 
-        //mSensormanager=(SensorManager)getSystemService(Context.SENSOR_SERVICE);
-        //accelerometer=mSensormanager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-        //mSensormanager.registerListener(this,accelerometer,sampleRate1);
-
-    }
-
-    public class Graphs extends AppCompatActivity implements SensorEventListener {
-
-        @Override
-        public void onSensorChanged(SensorEvent event) {
-
+        mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        if (mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION) != null){
+            // Success! There's a accelerometer.
+            accelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
+            mSensorManager.registerListener(this, accelerometer, sampleRate1);
         }
-
-        @Override
-        public void onAccuracyChanged(Sensor sensor, int accuracy) {
-
+        else {
+            // Failure! No accelerometer.
+            Toast.makeText(getApplicationContext(), "ERROR! No Acceleromenter available!", Toast.LENGTH_LONG).show();
         }
     }
-    /**
-     * Implements the fft functionality as an async task
-     * FFT(int n): constructor with fft length
-     * fft(double[] x, double[] y)
-     */
+
+    private float computeMagnitude(float[] values){
+        return (float) Math.sqrt(Math.pow(values[0], 2) + Math.pow(values[1], 2) + Math.pow(values[2], 2));
+    }
+
+    @Override
+    public void onSensorChanged(SensorEvent event) {
+        accelXSeries.appendData(new DataPoint(event.timestamp, event.values[0]), true, 500);
+        accelYSeries.appendData(new DataPoint(event.timestamp, event.values[1]), true, 500);
+        accelZSeries.appendData(new DataPoint(event.timestamp, event.values[2]), true, 500);
+        accelMagSeries.appendData(new DataPoint(event.timestamp, computeMagnitude(event.values)), true, 500);
+        graph1.onDataChanged(true, true);
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+        Toast.makeText(getApplicationContext(), "Now the sampling rate is " + String.valueOf(sampleRate1), Toast.LENGTH_SHORT).show();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        mSensorManager.registerListener(this, accelerometer, sampleRate1);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        mSensorManager.unregisterListener(this);
+    }
+
+        /**
+         * Implements the fft functionality as an async task
+         * FFT(int n): constructor with fft length
+         * fft(double[] x, double[] y)
+         */
 
     private class FFTAsynctask extends AsyncTask<double[], Void, double[]> {
 
