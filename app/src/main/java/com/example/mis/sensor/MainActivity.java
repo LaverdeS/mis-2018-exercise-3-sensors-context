@@ -28,15 +28,15 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        //setContentView(R.layout.activity_main);
+        setContentView(R.layout.activity_main);
 
         //initiate and fill example array with random values
-        rndAccExamplevalues = new double[64];
-        randomFill(rndAccExamplevalues);
-        new FFTAsynctask(64).execute(rndAccExamplevalues);
+        //rndAccExamplevalues = new double[64];
+        //randomFill(rndAccExamplevalues);
+        //new FFTAsynctask(64).execute(rndAccExamplevalues);
 
-        mSensormanager=(SensorManager)getSystemService(Context.SENSOR_SERVICE);
-        accelerometer=mSensormanager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        //mSensormanager=(SensorManager)getSystemService(Context.SENSOR_SERVICE);
+        //accelerometer=mSensormanager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         //mSensormanager.registerListener(this,accelerometer,sampleRate1);
 
     }
@@ -72,25 +72,26 @@ public class MainActivity extends AppCompatActivity {
         protected double[] doInBackground(double[]... values) {
 
 
-            double[] realPart = values[0].clone(); // actual acceleration values
-            double[] imagPart = new double[wsize]; // init empty
+            //double[] realPart = values[0].clone(); // actual acceleration values
+            //double[] imagPart = new double[wsize]; // init empty
 
             /**
              * Init the FFT class with given window size and run it with your input.
              * The fft() function overrides the realPart and imagPart arrays!
              */
-            FFT fft = new FFT(wsize);
-            fft.fft(realPart, imagPart);
+            //FFT fft = new FFT(wsize);
+            //fft.fft(realPart, imagPart);
             //init new double array for magnitude (e.g. frequency count)
-            double[] magnitude = new double[wsize];
+            //double[] magnitude = new double[wsize];
 
 
             //fill array with magnitude values of the distribution
-            for (int i = 0; wsize > i ; i++) {
-                magnitude[i] = Math.sqrt(Math.pow(realPart[i], 2) + Math.pow(imagPart[i], 2));
-            }
+            //for (int i = 0; wsize > i ; i++) {
+                //magnitude[i] = Math.sqrt(Math.pow(realPart[i], 2) + Math.pow(imagPart[i], 2));
+            //}
 
-            return magnitude;
+            //return magnitude;
+            return new double[0];
 
         }
 
