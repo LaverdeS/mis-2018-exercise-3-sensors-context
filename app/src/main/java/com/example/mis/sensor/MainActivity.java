@@ -10,6 +10,7 @@ import android.os.AsyncTask;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.util.LogPrinter;
 import android.view.View;
 import android.widget.SeekBar;
 import android.widget.Toast;
@@ -22,21 +23,29 @@ import com.jjoe64.graphview.series.LineGraphSeries;
 
 import java.util.Random;
 
+import static java.util.Arrays.sort;
+
 public class MainActivity extends AppCompatActivity implements SensorEventListener {
 
     //example variables
     private double[] rndAccExamplevalues;
+    private double[] accValues;
     private double[] freqCounts;
+    private AsyncTask<double[], Void, double[]> fftTask;
     private SensorManager mSensorManager;
     private Sensor accelerometer;
     private SeekBar mSeekBar1;
+    private SeekBar mSeekBar2;
     private GraphView graph1;
+    private GraphView graph2;
     private LineGraphSeries<DataPoint> accelXSeries = new LineGraphSeries<>();
     private LineGraphSeries<DataPoint> accelYSeries = new LineGraphSeries<>();
     private LineGraphSeries<DataPoint> accelZSeries = new LineGraphSeries<>();
     private LineGraphSeries<DataPoint> accelMagSeries = new LineGraphSeries<>();
-    private int sampleRate1=200000;
-    private int sampleRate2=8;
+    private LineGraphSeries<DataPoint> FFTSeries = new LineGraphSeries<>();
+    private int samplingPeriod = 200000; //in microseconds
+    private int wsize = 256;
+    private int buffer = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,12 +66,36 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
-                sampleRate1 = (tempProgress * 20000) + 10000;
+                samplingPeriod = (tempProgress * 20000) + 100000; // in microseconds
                 mSensorManager.unregisterListener(MainActivity.this);
-                mSensorManager.registerListener(MainActivity.this, accelerometer, sampleRate1);            }
+                mSensorManager.registerListener(MainActivity.this, accelerometer, samplingPeriod);            }
         });
 
-        graph1 = (GraphView) findViewById(R.id.graph1);
+        mSeekBar2 = findViewById(R.id.seekBar2);
+        mSeekBar2.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            private int temporaryWsize;
+
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                temporaryWsize = progress + 4;
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {}
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                wsize = (int) Math.pow(2, temporaryWsize);
+                accValues = new double[wsize];
+                //Log.println(Log.DEBUG, "debug", String.valueOf(accValues[0]));
+                Toast.makeText(getApplicationContext(),
+                        "Window size is now " + String.valueOf(wsize),
+                        Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        graph1 = findViewById(R.id.graph1);
+        graph1.onDataChanged(true, true);
         graph1.getViewport().setScrollableY(false);
         graph1.getViewport().setScrollable(true);
         graph1.getViewport().setBackgroundColor(Color.DKGRAY);
@@ -78,16 +111,28 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         graph1.addSeries(accelMagSeries);
         accelMagSeries.setColor(Color.WHITE);
 
+        graph2 = findViewById(R.id.graph2);
+        graph2.onDataChanged(true, true);
+        graph2.getViewport().setScrollableY(false);
+        graph2.getViewport().setScrollable(true);
+        graph2.getViewport().setBackgroundColor(Color.DKGRAY);
+        graph2.getViewport().setBorderColor(Color.LTGRAY);
+        graph2.getGridLabelRenderer().setHorizontalLabelsVisible(false);
+
+        graph2.addSeries(FFTSeries);
+        FFTSeries.setColor(Color.YELLOW);
+        accValues = new double[wsize];
+
         //initiate and fill example array with random values
-        rndAccExamplevalues = new double[64];
-        randomFill(rndAccExamplevalues);
-        new FFTAsynctask(64).execute(rndAccExamplevalues);
+        //rndAccExamplevalues = new double[64];
+        //randomFill(rndAccExamplevalues);
+        //new FFTAsynctask(64).execute(rndAccExamplevalues);
 
         mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         if (mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION) != null){
             // Success! There's a accelerometer.
             accelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
-            mSensorManager.registerListener(this, accelerometer, sampleRate1);
+            mSensorManager.registerListener(this, accelerometer, samplingPeriod);
         }
         else {
             // Failure! No accelerometer.
@@ -106,23 +151,30 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         accelZSeries.appendData(new DataPoint(event.timestamp, event.values[2]), true, 500);
         accelMagSeries.appendData(new DataPoint(event.timestamp, computeMagnitude(event.values)), true, 500);
         graph1.onDataChanged(true, true);
+        accValues[buffer % wsize] = computeMagnitude(event.values);
+        buffer++;
+        new FFTAsynctask(wsize).execute(accValues);
+
     }
 
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
-        Toast.makeText(getApplicationContext(), "Now the sampling rate is " + String.valueOf(sampleRate1), Toast.LENGTH_SHORT).show();
+        Toast.makeText(getApplicationContext(),
+                "Now the sampling period is " + String.valueOf(samplingPeriod/1000) + " ms",
+                Toast.LENGTH_SHORT).show();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        mSensorManager.registerListener(this, accelerometer, sampleRate1);
+        mSensorManager.registerListener(this, accelerometer, samplingPeriod);
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         mSensorManager.unregisterListener(this);
+
     }
 
         /**
@@ -143,34 +195,36 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         @Override
         protected double[] doInBackground(double[]... values) {
 
-
-            //double[] realPart = values[0].clone(); // actual acceleration values
-            //double[] imagPart = new double[wsize]; // init empty
+            double[] realPart = values[0].clone(); // actual acceleration values
+            double[] imagPart = new double[this.wsize]; // init empty
 
             /**
              * Init the FFT class with given window size and run it with your input.
              * The fft() function overrides the realPart and imagPart arrays!
              */
-            //FFT fft = new FFT(wsize);
-            //fft.fft(realPart, imagPart);
+            FFT fft = new FFT(this.wsize);
+            fft.fft(realPart, imagPart);
             //init new double array for magnitude (e.g. frequency count)
-            //double[] magnitude = new double[wsize];
+            double[] magnitude = new double[this.wsize];
 
 
             //fill array with magnitude values of the distribution
-            //for (int i = 0; wsize > i ; i++) {
-                //magnitude[i] = Math.sqrt(Math.pow(realPart[i], 2) + Math.pow(imagPart[i], 2));
-            //}
+            for (int i = 0; this.wsize > i ; i++) {
+                magnitude[i] = Math.sqrt(Math.pow(realPart[i], 2) + Math.pow(imagPart[i], 2));
+            }
 
-            //return magnitude;
-            return new double[0];
-
+            return magnitude;
         }
 
         @Override
         protected void onPostExecute(double[] values) {
             //hand over values to global variable after background task is finished
             freqCounts = values;
+            DataPoint[] data = new DataPoint[this.wsize];
+            for (int i = 0; i < this.wsize; i++) {
+                data[i] = new DataPoint(i, freqCounts[i]);
+            }
+            FFTSeries.resetData(data);
         }
     }
 
