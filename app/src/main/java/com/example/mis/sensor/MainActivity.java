@@ -35,7 +35,7 @@ import java.util.Random;
 
 import static java.util.Arrays.sort;
 
-public class MainActivity extends AppCompatActivity implements SensorEventListener {
+public class MainActivity extends AppCompatActivity implements SensorEventListener, GoogleApiClient.OnConnectionFailedListener, GoogleApiClient.ConnectionCallbacks {
 
     //example variables
     private double[] rndAccExamplevalues;
@@ -196,7 +196,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     }
 
-        /**
+    //@Override
+    //public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {}
+
+    /**
          * Implements the fft functionality as an async task
          * FFT(int n): constructor with fft length
          * fft(double[] x, double[] y)
@@ -287,18 +290,18 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         }
     }
 
-    //@Override
+    @Override
     public void onConnected(@Nullable Bundle bundle){
-        Intent intent = new Intent(this, ActivityDetectingService.class);
-        PendingIntent pendingIntent = PendingIntent.getService(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+        Intent intent = new Intent(getApplicationContext(), ActivityDetectingService.class);
+        PendingIntent pendingIntent = PendingIntent.getService(getApplicationContext(), 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
         ActivityRecognition.ActivityRecognitionApi.requestActivityUpdates(mApiClient, 3000, pendingIntent);
     }
 
-    //@Override
-    //public void onConnectionSuspended(int i){}
+    @Override
+    public void onConnectionSuspended(int i){}
 
-    //@Override
-    //public void onConnectionFailed(@NonNull ConnectionResult connectionResult){}
+    @Override
+    public void onConnectionFailed(@NonNull ConnectionResult connectionResult){}
 
 
     /**
