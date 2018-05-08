@@ -1,12 +1,17 @@
 package com.example.mis.sensor;
 
+import android.app.IntentService;
+import android.app.PendingIntent;
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Color;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.AsyncTask;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -16,6 +21,11 @@ import android.widget.SeekBar;
 import android.widget.Toast;
 
 import com.example.mis.sensor.FFT;
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.location.ActivityRecognition;
+import com.google.android.gms.location.ActivityRecognitionResult;
+import com.google.android.gms.location.DetectedActivity;
 import com.jjoe64.graphview.GraphView;
 import com.jjoe64.graphview.LegendRenderer;
 import com.jjoe64.graphview.series.DataPoint;
@@ -46,6 +56,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private int samplingPeriod = 200000; //in microseconds
     private int wsize = 256;
     private int buffer = 0;
+
+    private GoogleApiClient mApiClient;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -94,6 +106,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             }
         });
 
+        //EXERCISE 3a variables
         graph1 = findViewById(R.id.graph1);
         graph1.onDataChanged(true, true);
         graph1.getViewport().setScrollableY(false);
@@ -122,6 +135,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         graph2.addSeries(FFTSeries);
         FFTSeries.setColor(Color.YELLOW);
         accValues = new double[wsize];
+
+        // EXERCISE 3b variables
+        // https://code.tutsplus.com/tutorials/how-to-recognize-user-activity-with-activity-recognition--cms-25851
+        mApiClient = new GoogleApiClient.Builder(this).addApi(ActivityRecognition.API)
+                .addConnectionCallbacks(this).addOnConnectionFailedListener(this).build();
+        mApiClient.connect();
 
         //initiate and fill example array with random values
         //rndAccExamplevalues = new double[64];
@@ -228,7 +247,58 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         }
     }
 
+    // EXERCISE 3b
+    // https://code.tutsplus.com/tutorials/how-to-recognize-user-activity-with-activity-recognition--cms-25851
+    private class ActivityDetectingService extends IntentService {
+        public ActivityDetectingService(){
+            super("ActivityDetectingService");
+        }
 
+        public ActivityDetectingService(String name){
+            super(name);
+        }
+
+        @Override
+        protected void onHandleIntent(Intent intent){
+            if(ActivityRecognitionResult.hasResult(intent)){
+                ActivityRecognitionResult result = ActivityRecognitionResult.extractResult(intent);
+                triggerActionOnActivity(result.getMostProbableActivity());
+            }
+        }
+
+        private void triggerActionOnActivity(DetectedActivity activity){
+            if (activity.getConfidence() >= 50){
+                switch (activity.getType()){
+                    case DetectedActivity.ON_BICYCLE:{
+                        Log.e("ActivityRecognition", "On Bicycle: " + activity.getConfidence());
+                        break;
+                    }
+                    case DetectedActivity.WALKING:{
+                        Log.e("ActivityRecognition", "Walking: " + activity.getConfidence());
+                        break;
+                    }
+                    default:{
+                        Log.e("ActivityRecognition", "Something else: " + activity.getConfidence());
+                    }
+                }
+            }else{
+                Log.e("ActivityRecognition", "Nothing Recognized. Confidence = " + activity.getConfidence());
+            }
+        }
+    }
+
+    //@Override
+    public void onConnected(@Nullable Bundle bundle){
+        Intent intent = new Intent(this, ActivityDetectingService.class);
+        PendingIntent pendingIntent = PendingIntent.getService(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+        ActivityRecognition.ActivityRecognitionApi.requestActivityUpdates(mApiClient, 3000, pendingIntent);
+    }
+
+    //@Override
+    //public void onConnectionSuspended(int i){}
+
+    //@Override
+    //public void onConnectionFailed(@NonNull ConnectionResult connectionResult){}
 
 
     /**
