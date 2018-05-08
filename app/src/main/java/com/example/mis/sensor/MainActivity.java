@@ -2,8 +2,15 @@ package com.example.mis.sensor;
 
 import android.app.IntentService;
 import android.app.PendingIntent;
+import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.location.Location;
+import android.os.Binder;
+import android.os.IBinder;
+import android.support.v4.content.LocalBroadcastManager;
 import android.graphics.Color;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -24,8 +31,12 @@ import com.example.mis.sensor.FFT;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.ActivityRecognition;
+import com.google.android.gms.location.ActivityRecognitionClient;
 import com.google.android.gms.location.ActivityRecognitionResult;
 import com.google.android.gms.location.DetectedActivity;
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.tasks.Task;
 import com.jjoe64.graphview.GraphView;
 import com.jjoe64.graphview.LegendRenderer;
 import com.jjoe64.graphview.series.DataPoint;
@@ -33,9 +44,10 @@ import com.jjoe64.graphview.series.LineGraphSeries;
 
 import java.util.Random;
 
+import static android.location.LocationManager.GPS_PROVIDER;
 import static java.util.Arrays.sort;
 
-public class MainActivity extends AppCompatActivity implements SensorEventListener, GoogleApiClient.OnConnectionFailedListener, GoogleApiClient.ConnectionCallbacks {
+public class MainActivity extends AppCompatActivity implements SensorEventListener {
 
     //example variables
     private double[] rndAccExamplevalues;
@@ -58,12 +70,16 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private int buffer = 0;
 
     private GoogleApiClient mApiClient;
+    private BroadcastReceiver broadcastReceiver;
+    private String TAG = MainActivity.class.getSimpleName();
+    private Location location = new Location(GPS_PROVIDER);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        //EXERCISE 3a variables
         mSeekBar1 = findViewById(R.id.seekBar1);
         mSeekBar1.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             private int tempProgress;
@@ -106,7 +122,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             }
         });
 
-        //EXERCISE 3a variables
         graph1 = findViewById(R.id.graph1);
         graph1.onDataChanged(true, true);
         graph1.getViewport().setScrollableY(false);
@@ -138,9 +153,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         // EXERCISE 3b variables
         // https://code.tutsplus.com/tutorials/how-to-recognize-user-activity-with-activity-recognition--cms-25851
-        mApiClient = new GoogleApiClient.Builder(this).addApi(ActivityRecognition.API)
-                .addConnectionCallbacks(this).addOnConnectionFailedListener(this).build();
-        mApiClient.connect();
+        // ###THIS ONE### https://www.androidhive.info/2017/12/android-user-activity-recognition-still-walking-runnimg-driving-etc/ ###THIS ONE###
+        //mApiClient = new GoogleApiClient.Builder(this).addApi(ActivityRecognition.API)
+        //        .addConnectionCallbacks(this).addOnConnectionFailedListener(this).build();
+        //mApiClient.connect();
 
         //initiate and fill example array with random values
         //rndAccExamplevalues = new double[64];
@@ -157,6 +173,19 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             // Failure! No accelerometer.
             Toast.makeText(getApplicationContext(), "ERROR! No Acceleromenter available!", Toast.LENGTH_LONG).show();
         }
+
+        broadcastReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if (intent.getAction().equals("activity_intent")){
+                    int type = intent.getIntExtra("type", -1);
+                    int confidence = intent.getIntExtra("confidence", 0);
+                    handleUserActivity(type, confidence);
+                }
+            }
+        };
+        startTracking();
+        LocalBroadcastManager.getInstance(getApplicationContext()).registerReceiver(broadcastReceiver, new IntentFilter("activity_intent"));
     }
 
     private float computeMagnitude(float[] values){
@@ -186,14 +215,58 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     protected void onResume() {
         super.onResume();
+        startTracking();
         mSensorManager.registerListener(this, accelerometer, samplingPeriod);
+        LocalBroadcastManager.getInstance(getApplicationContext()).registerReceiver(broadcastReceiver, new IntentFilter("activity_intent"));
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        stopTracking();
         mSensorManager.unregisterListener(this);
+        LocalBroadcastManager.getInstance(getApplicationContext()).unregisterReceiver(broadcastReceiver);
+    }
 
+    private void handleUserActivity(int type, int confidence){
+        String label;
+        if(confidence >= 50 && location.getSpeed() > 1.5 && location.getSpeed() < 9){ // if the speed is between 1.5 and 30 m/s (roughly 5.5 - 33 km/h)
+            switch(type){                                                             // there is an high probability that the user is jogging or cycling
+                case DetectedActivity.RUNNING:{
+                    //if(location.getSpeed() > 1.5 && location.getSpeed() < 3){ // speed between 5.5 and 11 km/h: the user is probably running
+                        label = "Running!";
+                    //}
+                    break;
+                }
+                case DetectedActivity.ON_BICYCLE: {
+                    //if(location.getSpeed() > 3 && location.getSpeed() < 9){ // speed between 11 and 33 km/h: the user is probably cycling
+                        label = "Cycling!";
+                    //}
+                    break;
+                }
+                case DetectedActivity.UNKNOWN:{
+                    label = "Unknown!";
+                    break;
+                }
+                default:{
+                    label = "Something else!";
+                    break;
+                }
+            }
+        }else{
+            label = "Unknown!";
+        }
+        Log.e(TAG, "User activity: " + label + ", Confidence: " + confidence);
+    }
+
+    private void startTracking(){
+        Intent intent1 = new Intent(getApplicationContext(), BackgroundDetectedActivityService.class);
+        startService(intent1);
+    }
+
+    private void stopTracking(){
+        Intent intent1 = new Intent(getApplicationContext(), BackgroundDetectedActivityService.class);
+        stopService(intent1);
     }
 
     //@Override
@@ -252,7 +325,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     // EXERCISE 3b
     // https://code.tutsplus.com/tutorials/how-to-recognize-user-activity-with-activity-recognition--cms-25851
-    private class ActivityDetectingService extends IntentService {
+    /*private class ActivityDetectingService extends IntentService {
         public ActivityDetectingService(){
             super("ActivityDetectingService");
         }
@@ -301,8 +374,94 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     public void onConnectionSuspended(int i){}
 
     @Override
-    public void onConnectionFailed(@NonNull ConnectionResult connectionResult){}
+    public void onConnectionFailed(@NonNull ConnectionResult connectionResult){}*/
 
+    public class DetectedActivitiesIntentService extends IntentService{
+
+        public DetectedActivitiesIntentService(){
+            super(DetectedActivitiesIntentService.class.getSimpleName());
+        }
+
+        @Override
+        public void onCreate(){ super.onCreate(); }
+
+        @SuppressWarnings("unchecked")
+        @Override
+        protected void onHandleIntent(Intent intent){
+            ActivityRecognitionResult result = ActivityRecognitionResult.extractResult(intent);
+            DetectedActivity activity = result.getMostProbableActivity();
+            Log.e(TAG, "Detected activity: " + activity.getType() + ", " + activity.getConfidence());
+            broadcastActivity(activity);
+        }
+
+        private void broadcastActivity(DetectedActivity activity){
+            Intent intent = new Intent("activity_intent");
+            intent.putExtra("type", activity.getType());
+            intent.putExtra("confidence", activity.getConfidence());
+            LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(intent);
+        }
+    }
+
+    public class BackgroundDetectedActivityService extends Service {
+        private Intent mIntentService;
+        private PendingIntent mPendingIntent;
+        private ActivityRecognitionClient mActivityRecognitionClient;
+
+        IBinder mBinder = new BackgroundDetectedActivityService.LocalBinder();
+
+        public class LocalBinder extends Binder {
+            public BackgroundDetectedActivityService getServerInstance(){
+                return BackgroundDetectedActivityService.this;
+            }
+        }
+
+        public BackgroundDetectedActivityService(){}
+
+        @Override
+        public void onCreate(){
+            super.onCreate();
+            mActivityRecognitionClient = new ActivityRecognitionClient(getApplicationContext());
+            mIntentService = new Intent(this, DetectedActivitiesIntentService.class);
+            mPendingIntent = PendingIntent.getService(this, 1, mIntentService, PendingIntent.FLAG_UPDATE_CURRENT);
+            Task<Void> task = mActivityRecognitionClient.requestActivityUpdates(3000, mPendingIntent);
+            task.addOnSuccessListener(new OnSuccessListener<Void>() {
+                @Override
+                public void onSuccess(Void aVoid) {
+                    Toast.makeText(getApplicationContext(), "Activity update REQUESTED!", Toast.LENGTH_SHORT).show();
+                }
+            });
+            task.addOnFailureListener(new OnFailureListener() {
+                @Override
+                public void onFailure(@NonNull Exception e) {
+                    Toast.makeText(getApplicationContext(), "Activity update FAILED!", Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+
+        @Nullable
+        @Override
+        public IBinder onBind(Intent intent){
+            return mBinder;
+        }
+
+        @Override
+        public void onDestroy(){
+            super.onDestroy();
+            Task<Void> task = mActivityRecognitionClient.removeActivityUpdates(mPendingIntent);
+            task.addOnSuccessListener(new OnSuccessListener<Void>() {
+                @Override
+                public void onSuccess(Void aVoid) {
+                    Toast.makeText(getApplicationContext(), "Activity update REMOVED!", Toast.LENGTH_SHORT).show();
+                }
+            });
+            task.addOnFailureListener(new OnFailureListener() {
+                @Override
+                public void onFailure(@NonNull Exception e) {
+                    Toast.makeText(getApplicationContext(), "Activity update REMOVING FAILED!", Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+    }
 
     /**
      * little helper function to fill example with random double values
