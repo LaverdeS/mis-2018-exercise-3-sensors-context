@@ -51,7 +51,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     //example variables
     private double[] rndAccExamplevalues;
-    private double[] accValues;
+    private double[] accMagValues;
+    private double[] accXValues;
+    private double[] accYValues;
+    private double[] accZValues;
     private double[] freqCounts;
     private AsyncTask<double[], Void, double[]> fftTask;
     private SensorManager mSensorManager;
@@ -69,9 +72,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private int wsize = 256;
     private int buffer = 0;
 
-    private GoogleApiClient mApiClient;
-    private BroadcastReceiver broadcastReceiver;
-    private String TAG = MainActivity.class.getSimpleName();
+    //private GoogleApiClient mApiClient;
+    //private BroadcastReceiver broadcastReceiver;
+    //private String TAG = MainActivity.class.getSimpleName();
     private Location location = new Location(GPS_PROVIDER);
 
     @Override
@@ -114,8 +117,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
                 wsize = (int) Math.pow(2, temporaryWsize);
-                accValues = new double[wsize];
-                //Log.println(Log.DEBUG, "debug", String.valueOf(accValues[0]));
+                accMagValues = new double[wsize];
+                //Log.println(Log.DEBUG, "debug", String.valueOf(accMagValues[0]));
                 Toast.makeText(getApplicationContext(),
                         "Window size is now " + String.valueOf(wsize),
                         Toast.LENGTH_SHORT).show();
@@ -149,7 +152,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         graph2.addSeries(FFTSeries);
         FFTSeries.setColor(Color.YELLOW);
-        accValues = new double[wsize];
+        accMagValues = new double[wsize];
 
         // EXERCISE 3b variables
         // https://code.tutsplus.com/tutorials/how-to-recognize-user-activity-with-activity-recognition--cms-25851
@@ -174,6 +177,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             Toast.makeText(getApplicationContext(), "ERROR! No Acceleromenter available!", Toast.LENGTH_LONG).show();
         }
 
+        /*
         broadcastReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
@@ -186,6 +190,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         };
         startTracking();
         LocalBroadcastManager.getInstance(getApplicationContext()).registerReceiver(broadcastReceiver, new IntentFilter("activity_intent"));
+        */
     }
 
     private float computeMagnitude(float[] values){
@@ -199,10 +204,15 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         accelZSeries.appendData(new DataPoint(event.timestamp, event.values[2]), true, 500);
         accelMagSeries.appendData(new DataPoint(event.timestamp, computeMagnitude(event.values)), true, 500);
         graph1.onDataChanged(true, true);
-        accValues[buffer % wsize] = computeMagnitude(event.values);
+        accMagValues[buffer % wsize] = computeMagnitude(event.values);
+        accXValues[buffer % wsize] = event.values[0]; // aka RED line
+        accYValues[buffer % wsize] = event.values[1]; // aka GREEN line
+        accZValues[buffer % wsize] = event.values[2]; // aka BLUE line
+        if(buffer % wsize == 0 && buffer > 0){
+            activityEvaluation(accXValues, accYValues, accZValues);
+        }
         buffer++;
-        new FFTAsynctask(wsize).execute(accValues);
-
+        new FFTAsynctask(wsize).execute(accMagValues);
     }
 
     @Override
@@ -215,20 +225,20 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     protected void onResume() {
         super.onResume();
-        startTracking();
+        //startTracking();
         mSensorManager.registerListener(this, accelerometer, samplingPeriod);
-        LocalBroadcastManager.getInstance(getApplicationContext()).registerReceiver(broadcastReceiver, new IntentFilter("activity_intent"));
+        //LocalBroadcastManager.getInstance(getApplicationContext()).registerReceiver(broadcastReceiver, new IntentFilter("activity_intent"));
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        stopTracking();
+        //stopTracking();
         mSensorManager.unregisterListener(this);
-        LocalBroadcastManager.getInstance(getApplicationContext()).unregisterReceiver(broadcastReceiver);
+        //LocalBroadcastManager.getInstance(getApplicationContext()).unregisterReceiver(broadcastReceiver);
     }
 
-    private void handleUserActivity(int type, int confidence){
+    /*private void handleUserActivity(int type, int confidence){
         String label;
         if(confidence >= 50 && location.getSpeed() > 1.5 && location.getSpeed() < 9){ // if the speed is between 1.5 and 30 m/s (roughly 5.5 - 33 km/h)
             switch(type){                                                             // there is an high probability that the user is jogging or cycling
@@ -270,7 +280,24 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     }
 
     //@Override
-    //public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {}
+    //public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {}*/
+
+    private void activityEvaluation(double[] accXValues, double[] accYValues, double[] accZValues){
+        int xPeaks = 0; int yPeaks = 0; int zPeaks = 0;
+        for (double xValue : accXValues) { if(Math.abs(xValue - 1) > 0.3) xPeaks++; }
+        for (double yValue : accYValues) { if(Math.abs(yValue - 1) > 0.3) yPeaks++; }
+        for (double zValue : accZValues) { if(Math.abs(zValue - 1) > 0.3) zPeaks++; }
+        if(location.getSpeed() > 1.5 && location.getSpeed() < 3 && (yPeaks / wsize) > 0.75){ // Jogging detected, more details in external file
+            Toast.makeText(getApplicationContext(), "User is JOGGING!", Toast.LENGTH_SHORT).show();
+            // TODO: Play some music!!!
+        }else if(location.getSpeed() > 3 && location.getSpeed() < 9 && (xPeaks / wsize) > 0.5 && (yPeaks / wsize) > 0.5){ // Jogging detected, more details in external file
+            Toast.makeText(getApplicationContext(), "User is CYCLING!", Toast.LENGTH_SHORT).show();
+            // TODO: Play other music!!!
+        }else{ // The user is neither jogging nor cycling
+            Toast.makeText(getApplicationContext(), "User is doing SOMETHING ELSE!", Toast.LENGTH_SHORT).show();
+            // TODO: Stop the music!!!
+        }
+    }
 
     /**
          * Implements the fft functionality as an async task
@@ -374,7 +401,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     public void onConnectionSuspended(int i){}
 
     @Override
-    public void onConnectionFailed(@NonNull ConnectionResult connectionResult){}*/
+    public void onConnectionFailed(@NonNull ConnectionResult connectionResult){}
 
     public class DetectedActivitiesIntentService extends IntentService{
 
@@ -461,7 +488,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 }
             });
         }
-    }
+    }*/
 
     /**
      * little helper function to fill example with random double values
