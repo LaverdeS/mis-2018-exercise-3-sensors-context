@@ -17,6 +17,7 @@ import android.net.Uri;
 import android.os.Binder;
 import android.os.IBinder;
 import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v4.content.LocalBroadcastManager;
 import android.graphics.Color;
 import android.hardware.Sensor;
@@ -84,31 +85,30 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private int activityWSize = 7;
     private int buffer = 0;
 
-    //private GoogleApiClient mApiClient;
-    //private BroadcastReceiver broadcastReceiver;
-    //private String TAG = MainActivity.class.getSimpleName();
     private double speed;
     private LocationManager locationManager;
     private LocationListener locationListener = new LocationListener() {
         @Override
         public void onLocationChanged(Location location) {
-            speed = location.getSpeed();
+            Log.e("locationListener", "Location changed");
+            if(location.hasSpeed()) {
+                speed = location.getSpeed();
+            }
         }
 
         @Override
         public void onStatusChanged(String provider, int status, Bundle extras) {}
 
         @Override
-        public void onProviderEnabled(String provider) {}
+        public void onProviderEnabled(String provider) {Log.e("locationListener", "###PROVIDER ENABLED###");}
 
         @Override
         public void onProviderDisabled(String provider) {}
     };
 
-    private MediaPlayer mediaPlayerJogging;
-    private MediaPlayer mediaPlayerCycling;
-    //private Uri joggingTrack = Uri.parse("file:///res/raw/jeffspeed68__jam_it.mp3");
-    //private Uri cyclingTrack = Uri.parse("file:///res/raw/jeffspeed68__picking_guitars.mp3");
+    private static MediaPlayer mediaPlayerJogging;// = new MediaPlayer();
+    private static MediaPlayer mediaPlayerCycling;// = new MediaPlayer();
+    private MediaPlayer activePlayer = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -197,15 +197,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         accXValues = new double[activityWSize];
         accYValues = new double[activityWSize];
         accZValues = new double[activityWSize];
-        mediaPlayerJogging = MediaPlayer.create(getApplicationContext(), R.raw.jeffspeed68__jam_it);
-        mediaPlayerCycling = MediaPlayer.create(getApplicationContext(), R.raw.jeffspeed68__picking_guitars);
+        mediaPlayerJogging = MediaPlayer.create(getApplicationContext(), R.raw.tours__01__enthusiast);
+        mediaPlayerJogging.setLooping(true);
+        mediaPlayerCycling = MediaPlayer.create(this, R.raw.jeffspeed68__picking_guitars);
+        mediaPlayerCycling.setLooping(true);
+        //mediaPlayerJogging.start();
 
-        // EXERCISE 3b variables
-        // https://code.tutsplus.com/tutorials/how-to-recognize-user-activity-with-activity-recognition--cms-25851
-        // ###THIS ONE### https://www.androidhive.info/2017/12/android-user-activity-recognition-still-walking-runnimg-driving-etc/ ###THIS ONE###
-        //mApiClient = new GoogleApiClient.Builder(this).addApi(ActivityRecognition.API)
-        //        .addConnectionCallbacks(this).addOnConnectionFailedListener(this).build();
-        //mApiClient.connect();
 
         //initiate and fill example array with random values
         //rndAccExamplevalues = new double[64];
@@ -233,32 +230,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             return;
         }
         locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
+        //https://developer.android.com/training/permissions/requesting#java
+        if(ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 0);
+        }
         locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
 
-        /*try {
-            mediaPlayerJogging.setAudioSessionId(AudioManager.STREAM_MUSIC);
-            mediaPlayerJogging.setDataSource(getApplicationContext(), joggingTrack);
-            mediaPlayerJogging.prepare();
-            mediaPlayerCycling.setAudioSessionId(AudioManager.STREAM_MUSIC);
-        } catch (Exception e) {
-            e.printStackTrace();
-            Log.e("MediaPlayer", "Exception on setDataSource()!");
-        }*/
-        mediaPlayerJogging.start();
-        /*
-        broadcastReceiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                if (intent.getAction().equals("activity_intent")){
-                    int type = intent.getIntExtra("type", -1);
-                    int confidence = intent.getIntExtra("confidence", 0);
-                    handleUserActivity(type, confidence);
-                }
-            }
-        };
-        startTracking();
-        LocalBroadcastManager.getInstance(getApplicationContext()).registerReceiver(broadcastReceiver, new IntentFilter("activity_intent"));
-        */
     }
 
     private float computeMagnitude(float[] values){
@@ -296,6 +273,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         super.onResume();
         //startTracking();
         mSensorManager.registerListener(this, accelerometer, samplingPeriod);
+        //activePlayer.start();
         //LocalBroadcastManager.getInstance(getApplicationContext()).registerReceiver(broadcastReceiver, new IntentFilter("activity_intent"));
     }
 
@@ -304,9 +282,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         super.onPause();
         //stopTracking();
         mSensorManager.unregisterListener(this);
-        mediaPlayerJogging.pause();
-        mediaPlayerCycling.pause();
-        //LocalBroadcastManager.getInstance(getApplicationContext()).unregisterReceiver(broadcastReceiver);
+        activePlayer.pause();
+        //mediaPlayerJogging.pause();
+        //mediaPlayerCycling.pause();
     }
 
     @Override
@@ -314,80 +292,66 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         super.onDestroy();
         mediaPlayerJogging.release();
         mediaPlayerCycling.release();
+        activePlayer = null;
         mSensorManager.unregisterListener(this);
     }
 
-    /*private void handleUserActivity(int type, int confidence){
-        String label;
-        if(confidence >= 50 && location.getSpeed() > 1.5 && location.getSpeed() < 9){ // if the speed is between 1.5 and 30 m/s (roughly 5.5 - 33 km/h)
-            switch(type){                                                             // there is an high probability that the user is jogging or cycling
-                case DetectedActivity.RUNNING:{
-                    //if(location.getSpeed() > 1.5 && location.getSpeed() < 3){ // speed between 5.5 and 11 km/h: the user is probably running
-                        label = "Running!";
-                    //}
-                    break;
-                }
-                case DetectedActivity.ON_BICYCLE: {
-                    //if(location.getSpeed() > 3 && location.getSpeed() < 9){ // speed between 11 and 33 km/h: the user is probably cycling
-                        label = "Cycling!";
-                    //}
-                    break;
-                }
-                case DetectedActivity.UNKNOWN:{
-                    label = "Unknown!";
-                    break;
-                }
-                default:{
-                    label = "Something else!";
-                    break;
-                }
-            }
-        }else{
-            label = "Unknown!";
-        }
-        Log.e(TAG, "User activity: " + label + ", Confidence: " + confidence);
-    }
-
-    private void startTracking(){
-        Intent intent1 = new Intent(getApplicationContext(), BackgroundDetectedActivityService.class);
-        startService(intent1);
-    }
-
-    private void stopTracking(){
-        Intent intent1 = new Intent(getApplicationContext(), BackgroundDetectedActivityService.class);
-        stopService(intent1);
-    }
-
-    //@Override
-    //public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {}*/
-
     private void activityEvaluation(double[] accXValues, double[] accYValues, double[] accZValues){
         int xPeaks = 0; int yPeaks = 0; int zPeaks = 0;
-        for (double xValue : accXValues) { if(Math.abs(xValue) > 7) xPeaks++; }
-        for (double yValue : accYValues) { if(Math.abs(yValue) > 7) yPeaks++; }
-        for (double zValue : accZValues) { if(Math.abs(zValue) > 7) zPeaks++; }
+        for (double xValue : accXValues) { if(Math.abs(xValue) > 4) xPeaks++; }
+        for (double yValue : accYValues) { if(Math.abs(yValue) > 4) yPeaks++; }
+        for (double zValue : accZValues) { if(Math.abs(zValue) > 4) zPeaks++; }
         Log.e("location.getSpeed", "Speed: "+ String.valueOf(speed));
         Toast.makeText(getApplicationContext(), "Speed: "+ String.valueOf(speed), Toast.LENGTH_SHORT).show();
-        if(speed > 1.5 && speed < 3 && (yPeaks / activityWSize) > 0.75){ // Jogging detected, more details in external file
+        if((yPeaks / activityWSize) > 0.4 && (xPeaks / activityWSize) < 0.4){ // Jogging detected, more details in external file     #### speed > 1.5 && speed < 3 &&
             //Toast.makeText(getApplicationContext(), "User is JOGGING!", Toast.LENGTH_SHORT).show();
             Log.e("activityEvaluation", "User is JOGGING!");
-            // TODO: Play some music!!!
-            mediaPlayerJogging.start();
-        }else if(speed > 3 && speed < 9 && (xPeaks / activityWSize) > 0.5 && (yPeaks / activityWSize) > 0.5){ // Jogging detected, more details in external file
+            // Play some music!!!
+            //mediaPlayerJogging = MediaPlayer.create(getApplicationContext(), R.raw.tours__01__enthusiast);
+            if(activePlayer == null){
+                mediaPlayerJogging.start();
+                activePlayer = mediaPlayerJogging;
+            }else{
+                if(activePlayer.equals(mediaPlayerCycling)) {
+                    try {
+                        mediaPlayerCycling.stop();
+                        mediaPlayerCycling.prepare();
+                        mediaPlayerJogging.start();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }else if((xPeaks / activityWSize) > 0.2 && (yPeaks / activityWSize) > 0.2){ // Jogging detected, more details in external file      #### speed > 3 && speed < 9 &&
             //Toast.makeText(getApplicationContext(), "User is CYCLING!", Toast.LENGTH_SHORT).show();
             Log.e("activityEvaluation", "User is CYCLING!");
-            // TODO: Play other music!!!
-            mediaPlayerCycling.start();
+            // Play other music!!!
+            //mediaPlayerCycling = MediaPlayer.create(getApplicationContext(), R.raw.jeffspeed68__jam_it);
+            if(activePlayer == null){
+                mediaPlayerCycling.start();
+                activePlayer = mediaPlayerCycling;
+            }else{
+                if(activePlayer.equals(mediaPlayerCycling)) {
+                    try {
+                        mediaPlayerJogging.stop();
+                        mediaPlayerJogging.prepare();
+                        mediaPlayerCycling.start();
+                    }catch(Exception e){
+                        e.printStackTrace();
+                    }
+                }
+            }
         }else{ // The user is neither jogging nor cycling
             //Toast.makeText(getApplicationContext(), "User is doing SOMETHING ELSE!", Toast.LENGTH_SHORT).show();
             Log.e("activityEvaluation", "User is doing SOMETHING ELSE!");
-            // TODO: Stop the music!!!
+            // Stop the music!!!
             try {
-                //mediaPlayerJogging.stop();
-                //mediaPlayerJogging.prepare();
+                mediaPlayerJogging.stop();
+                mediaPlayerJogging.prepare();
                 mediaPlayerCycling.stop();
                 mediaPlayerCycling.prepare();
-            }catch (Exception e){
+                activePlayer = null;
+            }catch(Exception e){
                 e.printStackTrace();
             }
         }
@@ -444,146 +408,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         }
     }
 
-    // EXERCISE 3b
-    // https://code.tutsplus.com/tutorials/how-to-recognize-user-activity-with-activity-recognition--cms-25851
-    /*private class ActivityDetectingService extends IntentService {
-        public ActivityDetectingService(){
-            super("ActivityDetectingService");
-        }
-
-        public ActivityDetectingService(String name){
-            super(name);
-        }
-
-        @Override
-        protected void onHandleIntent(Intent intent){
-            if(ActivityRecognitionResult.hasResult(intent)){
-                ActivityRecognitionResult result = ActivityRecognitionResult.extractResult(intent);
-                triggerActionOnActivity(result.getMostProbableActivity());
-            }
-        }
-
-        private void triggerActionOnActivity(DetectedActivity activity){
-            if (activity.getConfidence() >= 50){
-                switch (activity.getType()){
-                    case DetectedActivity.ON_BICYCLE:{
-                        Log.e("ActivityRecognition", "On Bicycle: " + activity.getConfidence());
-                        break;
-                    }
-                    case DetectedActivity.WALKING:{
-                        Log.e("ActivityRecognition", "Walking: " + activity.getConfidence());
-                        break;
-                    }
-                    default:{
-                        Log.e("ActivityRecognition", "Something else: " + activity.getConfidence());
-                    }
-                }
-            }else{
-                Log.e("ActivityRecognition", "Nothing Recognized. Confidence = " + activity.getConfidence());
-            }
-        }
-    }
-
-    @Override
-    public void onConnected(@Nullable Bundle bundle){
-        Intent intent = new Intent(getApplicationContext(), ActivityDetectingService.class);
-        PendingIntent pendingIntent = PendingIntent.getService(getApplicationContext(), 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
-        ActivityRecognition.ActivityRecognitionApi.requestActivityUpdates(mApiClient, 3000, pendingIntent);
-    }
-
-    @Override
-    public void onConnectionSuspended(int i){}
-
-    @Override
-    public void onConnectionFailed(@NonNull ConnectionResult connectionResult){}
-
-    public class DetectedActivitiesIntentService extends IntentService{
-
-        public DetectedActivitiesIntentService(){
-            super(DetectedActivitiesIntentService.class.getSimpleName());
-        }
-
-        @Override
-        public void onCreate(){ super.onCreate(); }
-
-        @SuppressWarnings("unchecked")
-        @Override
-        protected void onHandleIntent(Intent intent){
-            ActivityRecognitionResult result = ActivityRecognitionResult.extractResult(intent);
-            DetectedActivity activity = result.getMostProbableActivity();
-            Log.e(TAG, "Detected activity: " + activity.getType() + ", " + activity.getConfidence());
-            broadcastActivity(activity);
-        }
-
-        private void broadcastActivity(DetectedActivity activity){
-            Intent intent = new Intent("activity_intent");
-            intent.putExtra("type", activity.getType());
-            intent.putExtra("confidence", activity.getConfidence());
-            LocalBroadcastManager.getInstance(getApplicationContext()).sendBroadcast(intent);
-        }
-    }
-
-    public class BackgroundDetectedActivityService extends Service {
-        private Intent mIntentService;
-        private PendingIntent mPendingIntent;
-        private ActivityRecognitionClient mActivityRecognitionClient;
-
-        IBinder mBinder = new BackgroundDetectedActivityService.LocalBinder();
-
-        public class LocalBinder extends Binder {
-            public BackgroundDetectedActivityService getServerInstance(){
-                return BackgroundDetectedActivityService.this;
-            }
-        }
-
-        public BackgroundDetectedActivityService(){}
-
-        @Override
-        public void onCreate(){
-            super.onCreate();
-            mActivityRecognitionClient = new ActivityRecognitionClient(getApplicationContext());
-            mIntentService = new Intent(this, DetectedActivitiesIntentService.class);
-            mPendingIntent = PendingIntent.getService(this, 1, mIntentService, PendingIntent.FLAG_UPDATE_CURRENT);
-            Task<Void> task = mActivityRecognitionClient.requestActivityUpdates(3000, mPendingIntent);
-            task.addOnSuccessListener(new OnSuccessListener<Void>() {
-                @Override
-                public void onSuccess(Void aVoid) {
-                    Toast.makeText(getApplicationContext(), "Activity update REQUESTED!", Toast.LENGTH_SHORT).show();
-                }
-            });
-            task.addOnFailureListener(new OnFailureListener() {
-                @Override
-                public void onFailure(@NonNull Exception e) {
-                    Toast.makeText(getApplicationContext(), "Activity update FAILED!", Toast.LENGTH_SHORT).show();
-                }
-            });
-        }
-
-        @Nullable
-        @Override
-        public IBinder onBind(Intent intent){
-            return mBinder;
-        }
-
-        @Override
-        public void onDestroy(){
-            super.onDestroy();
-            Task<Void> task = mActivityRecognitionClient.removeActivityUpdates(mPendingIntent);
-            task.addOnSuccessListener(new OnSuccessListener<Void>() {
-                @Override
-                public void onSuccess(Void aVoid) {
-                    Toast.makeText(getApplicationContext(), "Activity update REMOVED!", Toast.LENGTH_SHORT).show();
-                }
-            });
-            task.addOnFailureListener(new OnFailureListener() {
-                @Override
-                public void onFailure(@NonNull Exception e) {
-                    Toast.makeText(getApplicationContext(), "Activity update REMOVING FAILED!", Toast.LENGTH_SHORT).show();
-                }
-            });
-        }
-    }*/
-
     /**
      * little helper function to fill example with random double values
      */
@@ -593,7 +417,5 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             array[i] = rand.nextDouble();
         }
     }
-
-
 
 }
