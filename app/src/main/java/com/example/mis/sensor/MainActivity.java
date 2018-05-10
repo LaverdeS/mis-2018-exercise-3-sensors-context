@@ -248,7 +248,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         magMean /= activityWSize;
 
         Log.e("location.getSpeed", "Speed: "+ String.valueOf(speed));
-        Toast.makeText(getApplicationContext(), "Speed: "+ String.valueOf(speed), Toast.LENGTH_SHORT).show();
+        //Toast.makeText(getApplicationContext(), "Speed: "+ String.valueOf(speed), Toast.LENGTH_SHORT).show();
 
         if(speed > 3 && speed < 9 && 1.5 < magMean && magMean < 3.5){ // Cycling detected
             Log.e("activityEvaluation", "User is CYCLING!");
@@ -316,7 +316,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         }else{
             speed = -1;
         }
-        Log.e("locationListener", "Location: " + String.valueOf(location.getLatitude()) + ", " + String.valueOf(location.getLongitude()));
     }
 
     @Override
