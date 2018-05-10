@@ -1,24 +1,12 @@
 package com.example.mis.sensor;
 
 import android.Manifest;
-import android.app.IntentService;
-import android.app.PendingIntent;
-import android.app.Service;
-import android.content.BroadcastReceiver;
 import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationManager;
-import android.media.AudioManager;
 import android.media.MediaPlayer;
-import android.net.Uri;
-import android.os.Binder;
-import android.os.IBinder;
 import android.support.v4.app.ActivityCompat;
-import android.support.v4.content.ContextCompat;
-import android.support.v4.content.LocalBroadcastManager;
 import android.graphics.Color;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -36,37 +24,26 @@ import android.widget.SeekBar;
 import android.widget.Toast;
 
 import com.example.mis.sensor.FFT;
-import com.google.android.gms.common.ConnectionResult;
-import com.google.android.gms.common.api.GoogleApiClient;
-import com.google.android.gms.location.ActivityRecognition;
-import com.google.android.gms.location.ActivityRecognitionClient;
-import com.google.android.gms.location.ActivityRecognitionResult;
-import com.google.android.gms.location.DetectedActivity;
 
 import android.location.LocationListener;
 
-import com.google.android.gms.tasks.OnFailureListener;
-import com.google.android.gms.tasks.OnSuccessListener;
-import com.google.android.gms.tasks.Task;
+
 import com.jjoe64.graphview.GraphView;
 import com.jjoe64.graphview.LegendRenderer;
 import com.jjoe64.graphview.series.DataPoint;
 import com.jjoe64.graphview.series.LineGraphSeries;
 
-import java.io.IOException;
 import java.util.Random;
 
 import static android.location.LocationManager.GPS_PROVIDER;
 import static java.util.Arrays.sort;
 
-public class MainActivity extends AppCompatActivity implements SensorEventListener {
+public class MainActivity extends AppCompatActivity implements SensorEventListener, LocationListener {
 
     //example variables
     private double[] rndAccExamplevalues;
     private double[] accMagValues;
-    private double[] accXValues;
-    private double[] accYValues;
-    private double[] accZValues;
+    private double[] accMagValues4Music;
     private double[] freqCounts;
     private AsyncTask<double[], Void, double[]> fftTask;
     private SensorManager mSensorManager;
@@ -85,30 +62,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private int activityWSize = 7;
     private int buffer = 0;
 
-    private double speed;
+    private double speed = -1;
     private LocationManager locationManager;
-    private LocationListener locationListener = new LocationListener() {
-        @Override
-        public void onLocationChanged(Location location) {
-            Log.e("locationListener", "Location changed");
-            if(location.hasSpeed()) {
-                speed = location.getSpeed();
-            }
-        }
-
-        @Override
-        public void onStatusChanged(String provider, int status, Bundle extras) {}
-
-        @Override
-        public void onProviderEnabled(String provider) {Log.e("locationListener", "###PROVIDER ENABLED###");}
-
-        @Override
-        public void onProviderDisabled(String provider) {}
-    };
 
     private static MediaPlayer mediaPlayerJogging;// = new MediaPlayer();
     private static MediaPlayer mediaPlayerCycling;// = new MediaPlayer();
-    private MediaPlayer activePlayer = null;
+    private boolean isJoggingPlayerActive = false;
+    private boolean isCyclingPlayerActive = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -155,9 +115,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 activityWSize = temporaryWsize;
                 wsize = (int) Math.pow(2, temporaryWsize);
                 accMagValues = new double[wsize];
-                accXValues = new double[activityWSize];
-                accYValues = new double[activityWSize];
-                accZValues = new double[activityWSize];
+                accMagValues4Music = new double[activityWSize];
                 //Log.println(Log.DEBUG, "debug", String.valueOf(accMagValues[0]));
                 Toast.makeText(getApplicationContext(),
                         "Window size is now " + String.valueOf(wsize),
@@ -168,7 +126,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         graph1 = findViewById(R.id.graph1);
         graph1.onDataChanged(false, false);
         graph1.getViewport().setScrollableY(false);
-        graph1.getViewport().setScrollable(true);
+        graph1.getViewport().setScrollable(false);
         graph1.getViewport().setBackgroundColor(Color.DKGRAY);
         graph1.getViewport().setBorderColor(Color.LTGRAY);
         graph1.getGridLabelRenderer().setHorizontalLabelsVisible(false);
@@ -185,7 +143,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         graph2 = findViewById(R.id.graph2);
         graph2.onDataChanged(false, false);
         graph2.getViewport().setScrollableY(false);
-        graph2.getViewport().setScrollable(false);
+        graph2.getViewport().setScrollable(true);
         graph2.getViewport().setBackgroundColor(Color.DKGRAY);
         graph2.getViewport().setBorderColor(Color.LTGRAY);
         graph2.getGridLabelRenderer().setHorizontalLabelsVisible(false);
@@ -194,9 +152,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         FFTSeries.setColor(Color.YELLOW);
 
         accMagValues = new double[wsize];
-        accXValues = new double[activityWSize];
-        accYValues = new double[activityWSize];
-        accZValues = new double[activityWSize];
+        accMagValues4Music = new double[activityWSize];
         mediaPlayerJogging = MediaPlayer.create(getApplicationContext(), R.raw.tours__01__enthusiast);
         mediaPlayerJogging.setLooping(true);
         mediaPlayerCycling = MediaPlayer.create(this, R.raw.jeffspeed68__picking_guitars);
@@ -219,23 +175,17 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             Toast.makeText(getApplicationContext(), "ERROR! No Acceleromenter available!", Toast.LENGTH_LONG).show();
         }
 
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 0);
             return;
         }
-        locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
-        //https://developer.android.com/training/permissions/requesting#java
-        if(ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 0);
+        try {
+            locationManager = (LocationManager) this.getSystemService(LOCATION_SERVICE);
+            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, this);
+        }catch(Exception e){
+            e.printStackTrace();
         }
-        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
-
     }
 
     private float computeMagnitude(float[] values){
@@ -244,18 +194,16 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     @Override
     public void onSensorChanged(SensorEvent event) {
-        Log.e("SensorValue", "X: " + String.valueOf(event.values[0]) + " Y: " + String.valueOf(event.values[1]) + " Z: " + String.valueOf(event.values[2]));
+        Log.e("SensorValue", "Magnitude: " + String.valueOf(computeMagnitude(event.values)));
         accelXSeries.appendData(new DataPoint(event.timestamp, event.values[0]), true, 500);
         accelYSeries.appendData(new DataPoint(event.timestamp, event.values[1]), true, 500);
         accelZSeries.appendData(new DataPoint(event.timestamp, event.values[2]), true, 500);
         accelMagSeries.appendData(new DataPoint(event.timestamp, computeMagnitude(event.values)), true, wsize);
         graph1.onDataChanged(true, true);
         accMagValues[buffer % wsize] = computeMagnitude(event.values);
-        accXValues[buffer % activityWSize] = event.values[0]; // aka RED line
-        accYValues[buffer % activityWSize] = event.values[1]; // aka GREEN line
-        accZValues[buffer % activityWSize] = event.values[2]; // aka BLUE line
+        accMagValues4Music[buffer % activityWSize] = computeMagnitude(event.values);
         if(buffer % activityWSize == 0 && buffer > 0){
-            activityEvaluation(accXValues, accYValues, accZValues);
+            activityEvaluation(accMagValues4Music);
         }
         buffer++;
         new FFTAsynctask(wsize).execute(accMagValues);
@@ -271,91 +219,114 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     protected void onResume() {
         super.onResume();
-        //startTracking();
         mSensorManager.registerListener(this, accelerometer, samplingPeriod);
-        //activePlayer.start();
-        //LocalBroadcastManager.getInstance(getApplicationContext()).registerReceiver(broadcastReceiver, new IntentFilter("activity_intent"));
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        //stopTracking();
         mSensorManager.unregisterListener(this);
-        activePlayer.pause();
-        //mediaPlayerJogging.pause();
-        //mediaPlayerCycling.pause();
+        mediaPlayerJogging.pause();
+        isJoggingPlayerActive = false;
+        mediaPlayerCycling.pause();
+        isCyclingPlayerActive = false;
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
         mediaPlayerJogging.release();
+        isJoggingPlayerActive = false;
         mediaPlayerCycling.release();
-        activePlayer = null;
+        isCyclingPlayerActive = false;
         mSensorManager.unregisterListener(this);
     }
 
-    private void activityEvaluation(double[] accXValues, double[] accYValues, double[] accZValues){
-        int xPeaks = 0; int yPeaks = 0; int zPeaks = 0;
-        for (double xValue : accXValues) { if(Math.abs(xValue) > 4) xPeaks++; }
-        for (double yValue : accYValues) { if(Math.abs(yValue) > 4) yPeaks++; }
-        for (double zValue : accZValues) { if(Math.abs(zValue) > 4) zPeaks++; }
+    private void activityEvaluation(double[] accMagValues){
+        double magMean = 0;
+        for (double magVal : accMagValues) { magMean += magVal; }
+        magMean /= activityWSize;
+
         Log.e("location.getSpeed", "Speed: "+ String.valueOf(speed));
         Toast.makeText(getApplicationContext(), "Speed: "+ String.valueOf(speed), Toast.LENGTH_SHORT).show();
-        if((yPeaks / activityWSize) > 0.4 && (xPeaks / activityWSize) < 0.4){ // Jogging detected, more details in external file     #### speed > 1.5 && speed < 3 &&
-            //Toast.makeText(getApplicationContext(), "User is JOGGING!", Toast.LENGTH_SHORT).show();
-            Log.e("activityEvaluation", "User is JOGGING!");
-            // Play some music!!!
-            //mediaPlayerJogging = MediaPlayer.create(getApplicationContext(), R.raw.tours__01__enthusiast);
-            if(activePlayer == null){
-                mediaPlayerJogging.start();
-                activePlayer = mediaPlayerJogging;
-            }else{
-                if(activePlayer.equals(mediaPlayerCycling)) {
+
+        if(speed > 3 && speed < 9 && 1.5 < magMean && magMean < 3.5){ // Cycling detected
+            Log.e("activityEvaluation", "User is CYCLING!");
+            // Play other music!!!
+            if(!isCyclingPlayerActive){
+                if(isJoggingPlayerActive) {
                     try {
-                        mediaPlayerCycling.stop();
-                        mediaPlayerCycling.prepare();
-                        mediaPlayerJogging.start();
+                        mediaPlayerJogging.stop();
+                        isJoggingPlayerActive = false;
+                        mediaPlayerJogging.prepare();
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
                 }
-            }
-        }else if((xPeaks / activityWSize) > 0.2 && (yPeaks / activityWSize) > 0.2){ // Jogging detected, more details in external file      #### speed > 3 && speed < 9 &&
-            //Toast.makeText(getApplicationContext(), "User is CYCLING!", Toast.LENGTH_SHORT).show();
-            Log.e("activityEvaluation", "User is CYCLING!");
-            // Play other music!!!
-            //mediaPlayerCycling = MediaPlayer.create(getApplicationContext(), R.raw.jeffspeed68__jam_it);
-            if(activePlayer == null){
                 mediaPlayerCycling.start();
-                activePlayer = mediaPlayerCycling;
-            }else{
-                if(activePlayer.equals(mediaPlayerCycling)) {
+                isCyclingPlayerActive = true;
+            }
+        }else if(speed > 1.5 && speed < 3 && 3.5 < magMean){ // Jogging detected
+            Log.e("activityEvaluation", "User is JOGGING!");
+            // Play some music!!!
+            if(!isJoggingPlayerActive) {
+                if (isCyclingPlayerActive) {
                     try {
-                        mediaPlayerJogging.stop();
-                        mediaPlayerJogging.prepare();
-                        mediaPlayerCycling.start();
-                    }catch(Exception e){
+                        mediaPlayerCycling.stop();
+                        isCyclingPlayerActive = false;
+                        mediaPlayerCycling.prepare();
+                    } catch (Exception e) {
                         e.printStackTrace();
                     }
                 }
+                mediaPlayerJogging.start();
+                isJoggingPlayerActive = true;
             }
         }else{ // The user is neither jogging nor cycling
-            //Toast.makeText(getApplicationContext(), "User is doing SOMETHING ELSE!", Toast.LENGTH_SHORT).show();
             Log.e("activityEvaluation", "User is doing SOMETHING ELSE!");
             // Stop the music!!!
             try {
                 mediaPlayerJogging.stop();
+                isJoggingPlayerActive = false;
                 mediaPlayerJogging.prepare();
                 mediaPlayerCycling.stop();
+                isCyclingPlayerActive = false;
                 mediaPlayerCycling.prepare();
-                activePlayer = null;
             }catch(Exception e){
                 e.printStackTrace();
             }
         }
     }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults){
+        if(requestCode == 0 && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED){
+            Toast.makeText(getApplicationContext(), "Permiddion Granted", Toast.LENGTH_LONG);
+
+        }else{
+            return;
+        }
+    }
+
+    @Override
+    public void onLocationChanged(Location location) {
+        Log.e("locationListener", "Location changed");
+        if(location.hasSpeed()) {
+            speed = location.getSpeed();
+        }else{
+            speed = -1;
+        }
+        Log.e("locationListener", "Location: " + String.valueOf(location.getLatitude()) + ", " + String.valueOf(location.getLongitude()));
+    }
+
+    @Override
+    public void onStatusChanged(String provider, int status, Bundle extras) {}
+
+    @Override
+    public void onProviderEnabled(String provider) {}
+
+    @Override
+    public void onProviderDisabled(String provider) {}
 
     /**
          * Implements the fft functionality as an async task
